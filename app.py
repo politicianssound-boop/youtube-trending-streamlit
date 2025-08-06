@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 from io import StringIO
 from datetime import datetime
+import matplotlib.pyplot as plt
 
 API_KEY = st.secrets["YOUTUBE_API_KEY"]
 
@@ -35,7 +36,7 @@ COUNTRIES = {
 with tabs[0]:
     st.markdown("Consulta videos en **tendencia actual** por país, categoría y palabra clave (en el título).")
 
-    country_name = st.selectbox("🌍 País:", list(COUNTRIES.keys()))
+    country_name = st.selectbox("🌍 País (tendencias):", list(COUNTRIES.keys()))
     country_code = COUNTRIES[country_name]
     max_results = st.slider("🎥 Número de videos:", 5, 50, 20)
     keyword = st.text_input("🔍 Filtrar por palabra en el título (opcional):")
@@ -61,7 +62,6 @@ with tabs[0]:
             cat_name = next((k for k, v in categories.items() if v == cat_id), "Desconocida")
             title = item["snippet"]["title"]
 
-            # Filtrar por keyword y categoría si es necesario
             if (not keyword or keyword.lower() in title.lower()) and (
                 categories[category_filter] is None or categories[category_filter] == cat_id
             ):
@@ -92,7 +92,7 @@ with tabs[1]:
     st.markdown("Busca videos por palabra clave en cualquier país, aunque no estén en tendencia.")
 
     query = st.text_input("🔑 Palabra clave a buscar (ej. apache)", "")
-    region = st.selectbox("🌍 País:", list(COUNTRIES.keys()))
+    region = st.selectbox("🌍 País (búsqueda):", list(COUNTRIES.keys()))
     region_code = COUNTRIES[region]
     qty = st.slider("🎥 Resultados:", 5, 50, 20)
 
@@ -127,7 +127,7 @@ with tabs[1]:
 
 # TAB 3 – CANAL
 with tabs[2]:
-    st.markdown("🎯 Ingresa el **ID del canal** que puedes obtener desde las pestañas anteriores (columna 'Channel ID').")
+    st.markdown("🎯 Ingresa el **ID del canal** que puedes copiar desde las otras pestañas (columna 'Channel ID').")
 
     channel_id = st.text_input("🔗 Channel ID:", "")
 
@@ -167,6 +167,15 @@ with tabs[2]:
                     df_top = pd.DataFrame(top_videos)
                     st.markdown("📈 **Videos más vistos del canal:**")
                     st.dataframe(df_top)
+
+                    # Gráfico de barras
+                    st.markdown("📊 **Visualización de popularidad:**")
+                    plt.figure(figsize=(8, 5))
+                    plt.barh(df_top["Título"], range(len(df_top), 0, -1))
+                    plt.gca().invert_yaxis()
+                    plt.xlabel("Ranking (1 = más visto)")
+                    plt.tight_layout()
+                    st.pyplot(plt)
 
                     csv = StringIO()
                     df_top.to_csv(csv, index=False)
