@@ -1,12 +1,9 @@
 import streamlit as st
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-import time
 import pandas as pd
+import requests
 from io import StringIO
 
-# Lista de países disponibles en YouTube Trending
+# Lista de países compatibles con YouTube API
 COUNTRIES = {
     "Argentina": "AR",
     "Brasil": "BR",
@@ -27,62 +24,41 @@ COUNTRIES = {
     "Corea del Sur": "KR"
 }
 
-st.title("📺 Scraper de YouTube Trending")
-st.markdown("Extrae videos en tendencia por país directamente desde YouTube.")
+API_KEY = st.secrets["YOUTUBE_API_KEY"]
 
-# Parámetros del usuario
+st.title("📺 YouTube Trending (API)")
+st.markdown("Consulta videos populares por país usando la API oficial de YouTube.")
+
 country_name = st.selectbox("Selecciona un país:", list(COUNTRIES.keys()))
 country_code = COUNTRIES[country_name]
-
-max_videos = st.slider("Número de videos a extraer:", min_value=5, max_value=50, value=20, step=5)
+max_results = st.slider("Número de videos a mostrar:", min_value=5, max_value=50, value=20, step=5)
 
 if st.button("🔍 Obtener tendencias"):
-    st.info(f"Extrayendo top {max_videos} videos de {country_name}...")
+    url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode={country_code}&maxResults={max_results}&key={API_KEY}"
+    response = requests.get(url)
 
-    # Configurar Selenium en modo headless
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--no-sandbox")
+    if response.status_code == 200:
+        data = response.json()
 
-    driver = webdriver.Chrome(options=options)
-    url = f"https://www.youtube.com/feed/trending?gl={country_code}"
-    driver.get(url)
-    time.sleep(5)
+        videos = []
+        for item in data.get("items", []):
+            video = {
+                "Título": item["snippet"]["title"],
+                "Canal": item["snippet"]["channelTitle"],
+                "Vistas": int(item["statistics"].get("viewCount", 0)),
+                "Enlace": f"https://www.youtube.com/watch?v={item['id']}"
+            }
+            videos.append(video)
 
-    titles = []
-    channels = []
-    links = []
+        df = pd.DataFrame(videos)
+        st.success(f"{len(df)} videos extraídos para {country_name}.")
+        st.dataframe(df)
 
-    video_elements = driver.find_elements(By.TAG_NAME, "ytd-video-renderer")
-    for i, video in enumerate(video_elements[:max_videos]):
-        try:
-            title_elem = video.find_element(By.ID, "video-title")
-            titles.append(title_elem.text)
-            links.append(title_elem.get_attribute("href"))
+        csv = StringIO()
+        df.to_csv(csv, index=False)
+        st.download_button("⬇️ Descargar CSV", data=csv.getvalue(), file_name=f"trending_{country_code}.csv", mime="text/csv")
 
-            channel_elem = video.find_element(By.XPATH, ".//*[@id='channel-info']//yt-formatted-string")
-            channels.append(channel_elem.text)
-        except:
-            continue
+    else:
+        st.error(f"Error al consultar la API: {response.status_code}")
 
-    driver.quit()
 
-    df = pd.DataFrame({
-        "Título": titles,
-        "Canal": channels,
-        "Enlace": links
-    })
-
-    st.success(f"{len(df)} videos extraídos.")
-    st.dataframe(df)
-
-    # Botón para descargar
-    csv_buffer = StringIO()
-    df.to_csv(csv_buffer, index=False)
-    st.download_button(
-        label="⬇️ Descargar CSV",
-        data=csv_buffer.getvalue(),
-        file_name=f"trending_{country_code}.csv",
-        mime="text/csv"
-    )
