@@ -229,8 +229,9 @@ with tabs[2]:
 # 🌱 Nicho mejorado con antigüedad y más resultados
 with tabs[3]:
     st.markdown("Analiza canales pequeños para encontrar oportunidades de nicho.")
-    
-    kw_niche = st.text_input("Palabra clave o categoría:")
+
+    default_kw = st.session_state.get("nicho_kw", "")
+    kw_niche = st.text_input("Palabra clave o categoría:", value=default_kw)
     max_subs = st.number_input("Máx. suscriptores:", min_value=0, value=50000)
     max_views = st.number_input("Máx. vistas totales:", min_value=0, value=5000000)
     months_old = st.slider("Máx. antigüedad de vídeos (meses):", 1, 6, 2)
@@ -347,6 +348,14 @@ with tabs[4]:
         df_palabras = pd.DataFrame(top_palabras, columns=["Palabra", "Frecuencia"])
         st.subheader("Palabras más frecuentes en títulos de tendencias")
         st.dataframe(df_palabras)
+        for palabra, freq in top_palabras:
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.write(f"{palabra} ({freq})")
+        with col2:
+            if st.button("Analizar", key=f"analizar_{palabra}"):
+                st.session_state["nicho_kw"] = palabra
+                st.session_state["active_tab"] = "Nicho"
 
         # Mapeo de categorías
         cat_url = (
@@ -358,6 +367,7 @@ with tabs[4]:
         df_cats = pd.DataFrame(cat_count.items(), columns=["Categoría", "Frecuencia"])
         st.subheader("Categorías más frecuentes en tendencias")
         st.dataframe(df_cats)
+
 
 
 
