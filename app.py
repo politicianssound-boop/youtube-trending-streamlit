@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 API_KEY = st.secrets["YOUTUBE_API_KEY"]
 st.title("📺 YouTube Análisis Avanzado")
 
-tabs = st.tabs(["🔥 Trending", "🔍 Buscar", "🧠 Explorar Canal", "🌱 Nicho"])
+tabs = st.tabs(["🔥 Trending", "🔍 Buscar", "🧠 Explorar Canal", "🌱 Nicho","🧭 Ideas de Nicho"])
 
 COUNTRIES = {"México": "MX", "España": "ES", "Estados Unidos": "US", "India": "IN", "Brasil": "BR", "Canadá": "CA"}
 
@@ -323,7 +323,7 @@ with tabs[3]:
                 st.info("No se encontraron canales que cumplan con los filtros.")
 
 # 🧭 Ideas de Nicho
-with st.tab("🧭 Ideas de Nicho"):
+with tabs[4]:
     st.markdown("Genera ideas de nichos a partir de tendencias en YouTube sin introducir palabras clave.")
     country_ideas = st.selectbox("🌍 País:", list(COUNTRIES.keys()))
     max_videos_ideas = st.slider("Max vídeos a analizar:", 10, 50, 30)
@@ -358,6 +358,7 @@ with st.tab("🧭 Ideas de Nicho"):
         df_cats = pd.DataFrame(cat_count.items(), columns=["Categoría", "Frecuencia"])
         st.subheader("Categorías más frecuentes en tendencias")
         st.dataframe(df_cats)
+
 
 
 
