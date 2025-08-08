@@ -119,7 +119,6 @@ with tabs[1]:
             st.warning("Sin resultados.")
 
 # 🧠 Explorar Canal
-# 🧠 Explorar Canal
 with tabs[2]:
     st.markdown("Explorar canal por ID. Se muestran perfil completo, videos y estadísticas.")
     cid = st.text_input("Channel ID:")
@@ -291,10 +290,14 @@ with tabs[3]:
                         desc = c0["snippet"]["description"]
                         is_faceless = any(word in (title.lower() + desc.lower()) for word in faceless_keywords)
 
+                    # Calcular ratio vistas/suscriptor
+                        ratio = views_total / subs if subs > 0 else 0
+
                         canales_unicos[ch_id] = {
                             "Canal": title,
                             "Suscriptores": subs,
                             "Vistas totales": views_total,
+                            "Ratio vistas/suscriptor": round(ratio, 2),
                             "Faceless probable": "Sí" if is_faceless else "No",
                             "Enlace": f"https://www.youtube.com/channel/{ch_id}"
                         }
@@ -318,5 +321,43 @@ with tabs[3]:
                 st.bar_chart(df_words.set_index("Palabra"))
             else:
                 st.info("No se encontraron canales que cumplan con los filtros.")
+
+# 🧭 Ideas de Nicho
+with st.tab("🧭 Ideas de Nicho"):
+    st.markdown("Genera ideas de nichos a partir de tendencias en YouTube sin introducir palabras clave.")
+    country_ideas = st.selectbox("🌍 País:", list(COUNTRIES.keys()))
+    max_videos_ideas = st.slider("Max vídeos a analizar:", 10, 50, 30)
+
+    if st.button("Generar ideas"):
+        url = (
+            f"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics"
+            f"&chart=mostPopular&regionCode={COUNTRIES[country_ideas]}&maxResults={max_videos_ideas}&key={API_KEY}"
+        )
+        res = requests.get(url).json()
+
+        palabras = []
+        categorias = []
+        for item in res.get("items", []):
+            title_words = item["snippet"]["title"].lower().split()
+            palabras.extend([w.strip(".,!?") for w in title_words if len(w) > 3])
+            categorias.append(item["snippet"]["categoryId"])
+
+        # Ranking de palabras
+        top_palabras = Counter(palabras).most_common(20)
+        df_palabras = pd.DataFrame(top_palabras, columns=["Palabra", "Frecuencia"])
+        st.subheader("Palabras más frecuentes en títulos de tendencias")
+        st.dataframe(df_palabras)
+
+        # Mapeo de categorías
+        cat_url = (
+            f"https://www.googleapis.com/youtube/v3/videoCategories?part=snippet&regionCode={COUNTRIES[country_ideas]}&key={API_KEY}"
+        )
+        cats_data = requests.get(cat_url).json()
+        cat_map = {c["id"]: c["snippet"]["title"] for c in cats_data.get("items", [])}
+        cat_count = Counter([cat_map.get(cid, "Desconocida") for cid in categorias])
+        df_cats = pd.DataFrame(cat_count.items(), columns=["Categoría", "Frecuencia"])
+        st.subheader("Categorías más frecuentes en tendencias")
+        st.dataframe(df_cats)
+
 
 
