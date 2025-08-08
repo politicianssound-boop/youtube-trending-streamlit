@@ -119,10 +119,12 @@ with tabs[1]:
             st.warning("Sin resultados.")
 
 # 🧠 Explorar Canal
+# 🧠 Explorar Canal
 with tabs[2]:
     st.markdown("Explorar canal por ID. Se muestran perfil completo, videos y estadísticas.")
     cid = st.text_input("Channel ID:")
     order_opt = st.selectbox("Ordenar videos por:", ["Publicado", "Vistas", "Likes", "Título"])
+    videos_per_page = st.slider("Videos por página:", 10, 50, 20)
 
     if st.button("Explorar"):
         ch = requests.get(
@@ -141,19 +143,35 @@ with tabs[2]:
                 **Descripción:** {c0['snippet']['description']}
             """)
 
+            # Obtener todos los videos de la playlist de subidas
             pl = c0["contentDetails"]["relatedPlaylists"]["uploads"]
-            vids_req = requests.get(
-                f"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId={pl}&maxResults=20&key={API_KEY}"
-            ).json()
-            ids = [i["contentDetails"]["videoId"] for i in vids_req.get("items", [])]
-            stats = {
-                v["id"]: v for v in requests.get(
-                    f"https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&key={API_KEY}&id={','.join(ids)}"
-                ).json().get("items", [])
-            }
+            all_videos = []
+            next_page = None
+
+            while True:
+                vids_url = f"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId={pl}&maxResults=50&key={API_KEY}"
+                if next_page:
+                    vids_url += f"&pageToken={next_page}"
+
+                vids_req = requests.get(vids_url).json()
+                all_videos.extend(vids_req.get("items", []))
+                next_page = vids_req.get("nextPageToken")
+
+                if not next_page:
+                    break
+
+            ids = [i["contentDetails"]["videoId"] for i in all_videos]
+            stats = {}
+            for i in range(0, len(ids), 50):  # la API permite máx. 50 IDs por consulta
+                batch_ids = ids[i:i+50]
+                stats.update({
+                    v["id"]: v for v in requests.get(
+                        f"https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&key={API_KEY}&id={','.join(batch_ids)}"
+                    ).json().get("items", [])
+                })
 
             rows, dates, durations = [], [], []
-            for it in vids_req.get("items", []):
+            for it in all_videos:
                 vid = it["contentDetails"]["videoId"]
                 stt = stats.get(vid, {})
                 pub = it["snippet"]["publishedAt"][:10]
@@ -180,8 +198,15 @@ with tabs[2]:
             }
             orden_col = orden_mapping.get(order_opt, "Publicado")
             df3 = df3.sort_values(orden_col, ascending=False).reset_index(drop=True)
-            st.dataframe(df3)
 
+            # Paginación
+            total_pages = (len(df3) - 1) // videos_per_page + 1
+            page = st.number_input("Página:", min_value=1, max_value=total_pages, value=1)
+            start_idx = (page - 1) * videos_per_page
+            end_idx = start_idx + videos_per_page
+            st.dataframe(df3.iloc[start_idx:end_idx])
+
+            # Métricas
             if len(dates) > 1:
                 frec = (max(dates) - min(dates)) / (len(dates) - 1)
                 st.write("📅 Frecuencia entre publicaciones:", frec)
@@ -191,14 +216,16 @@ with tabs[2]:
                 avg_dur = datetime.timedelta(seconds=int(avg_sec))
                 st.write("⏱️ Duración promedio:", avg_dur)
 
+            # Gráfico
             plt.figure(figsize=(6, 4))
-            plt.barh(df3["Título"], df3["Vistas"])
+            plt.barh(df3["Título"].head(20), df3["Vistas"].head(20))
             plt.gca().invert_yaxis()
             st.pyplot(plt)
 
             st.download_button("⬇️ Descargar CSV", df3.to_csv(index=False), "channel_videos.csv", "text/csv")
         else:
             st.error("Channel ID inválido.")
+
 
 # 🌱 Nicho
 with tabs[3]:
@@ -210,3 +237,4 @@ with tabs[3]:
         st.bar_chart(df_niche.set_index("Palabra"))
     else:
         st.info("Primero explora un canal para analizar sus títulos aquí.")
+
