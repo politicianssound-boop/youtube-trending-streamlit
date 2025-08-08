@@ -11,6 +11,17 @@ st.title("📺 YouTube Análisis Avanzado")
 
 tabs = st.tabs(["🔥 Trending", "🔍 Buscar", "🧠 Explorar Canal", "🌱 Nicho","🧭 Ideas de Nicho"])
 
+# Lista de pestañas
+tabs_labels = ["Tendencias", "Buscar", "Explorar Canal", "Nicho", "Ideas de Nicho"]
+
+# Recuperar pestaña activa desde session_state o por defecto la primera
+active_tab_label = st.session_state.get("active_tab", tabs_labels[0])
+active_tab_index = tabs_labels.index(active_tab_label)
+
+# Crear pestañas
+tabs = st.tabs(tabs_labels)
+
+
 COUNTRIES = {"México": "MX", "España": "ES", "Estados Unidos": "US", "India": "IN", "Brasil": "BR", "Canadá": "CA"}
 
 def parse_iso8601_duration(duration: str) -> str:
@@ -345,17 +356,17 @@ with tabs[4]:
 
         # Ranking de palabras
         top_palabras = Counter(palabras).most_common(20)
-        df_palabras = pd.DataFrame(top_palabras, columns=["Palabra", "Frecuencia"])
         st.subheader("Palabras más frecuentes en títulos de tendencias")
-        st.dataframe(df_palabras)
+
         for palabra, freq in top_palabras:
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.write(f"{palabra} ({freq})")
-        with col2:
-            if st.button("Analizar", key=f"analizar_{palabra}"):
-                st.session_state["nicho_kw"] = palabra
-                st.session_state["active_tab"] = "Nicho"
+            with col2:
+                if st.button("Analizar", key=f"analizar_{palabra}"):
+                    st.session_state["nicho_kw"] = palabra
+                    st.session_state["active_tab"] = "Nicho"
+                    st.experimental_rerun()
 
         # Mapeo de categorías
         cat_url = (
@@ -367,6 +378,7 @@ with tabs[4]:
         df_cats = pd.DataFrame(cat_count.items(), columns=["Categoría", "Frecuencia"])
         st.subheader("Categorías más frecuentes en tendencias")
         st.dataframe(df_cats)
+
 
 
 
