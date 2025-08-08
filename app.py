@@ -229,12 +229,70 @@ with tabs[2]:
 
 # 🌱 Nicho
 with tabs[3]:
-    st.markdown("Análisis básico de nicho: palabras frecuentes en títulos (canal activo).")
-    if 'df3' in locals():
-        words = " ".join(df3["Título"].tolist()).lower().split()
-        common = Counter([w.strip(".,!?") for w in words if len(w) > 3]).most_common(20)
-        df_niche = pd.DataFrame(common, columns=["Palabra", "Frecuencia"])
-        st.bar_chart(df_niche.set_index("Palabra"))
-    else:
-        st.info("Primero explora un canal para analizar sus títulos aquí.")
+    st.markdown("Analiza canales pequeños para encontrar oportunidades de nicho.")
+    
+    kw_niche = st.text_input("Palabra clave o categoría:")
+    max_subs = st.number_input("Máx. suscriptores:", min_value=0, value=50000)
+    max_views = st.number_input("Máx. vistas totales:", min_value=0, value=5000000)
+    max_results_niche = st.slider("Videos a analizar:", 5, 50, 20)
+    
+    faceless_keywords = ["compilation", "animation", "gameplay", "tutorial", "music", "sound", "relax", "asmr", "lofi"]
+
+    if st.button("Buscar nichos"):
+        if not kw_niche:
+            st.warning("Introduce una palabra clave para iniciar la búsqueda.")
+        else:
+            url = (
+                f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults={max_results_niche}"
+                f"&q={kw_niche}&order=viewCount&key={API_KEY}"
+            )
+            search_res = requests.get(url).json()
+            
+            channel_info_list = []
+            niche_words = []
+            
+            for item in search_res.get("items", []):
+                ch_id = item["snippet"]["channelId"]
+                ch_data = requests.get(
+                    f"https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={ch_id}&key={API_KEY}"
+                ).json()
+
+                if ch_data.get("items"):
+                    c0 = ch_data["items"][0]
+                    subs = int(c0["statistics"].get("subscriberCount", 0))
+                    views_total = int(c0["statistics"].get("viewCount", 0))
+
+                    if subs <= max_subs and views_total <= max_views:
+                        title = c0["snippet"]["title"]
+                        desc = c0["snippet"]["description"]
+                        
+                        # Flag faceless
+                        is_faceless = any(word in (title.lower() + desc.lower()) for word in faceless_keywords)
+
+                        channel_info_list.append({
+                            "Canal": title,
+                            "Suscriptores": subs,
+                            "Vistas totales": views_total,
+                            "Faceless probable": "Sí" if is_faceless else "No",
+                            "Enlace": f"https://www.youtube.com/channel/{ch_id}"
+                        })
+
+                        # Palabras de títulos para ranking
+                        niche_words.extend(item["snippet"]["title"].lower().split())
+
+            # Mostrar tabla de canales candidatos
+            if channel_info_list:
+                df_channels = pd.DataFrame(channel_info_list).sort_values("Suscriptores")
+                st.subheader("Canales candidatos")
+                st.dataframe(df_channels)
+                st.download_button("⬇️ Descargar CSV", df_channels.to_csv(index=False), "nicho_canales.csv", "text/csv")
+
+                # Ranking de palabras clave
+                common_words = Counter([w.strip(".,!?") for w in niche_words if len(w) > 3]).most_common(15)
+                df_words = pd.DataFrame(common_words, columns=["Palabra", "Frecuencia"])
+                st.subheader("Palabras clave más usadas en títulos")
+                st.bar_chart(df_words.set_index("Palabra"))
+            else:
+                st.info("No se encontraron canales que cumplan con los filtros.")
+
 
