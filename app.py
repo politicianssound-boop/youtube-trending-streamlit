@@ -11,9 +11,6 @@ st.title("📺 YouTube Análisis Avanzado")
 
 tabs = st.tabs(["🔥 Trending", "🔍 Buscar", "🧠 Explorar Canal", "🌱 Nicho","🧭 Ideas de Nicho"])
 
-# Lista de pestañas
-tabs_labels = ["Tendencias", "Buscar", "Explorar Canal", "Nicho", "Ideas de Nicho"]
-
 # Recuperar pestaña activa desde session_state o por defecto la primera
 active_tab_label = st.session_state.get("active_tab", tabs_labels[0])
 active_tab_index = tabs_labels.index(active_tab_label)
@@ -378,6 +375,7 @@ with tabs[4]:
         df_cats = pd.DataFrame(cat_count.items(), columns=["Categoría", "Frecuencia"])
         st.subheader("Categorías más frecuentes en tendencias")
         st.dataframe(df_cats)
+
 
 
 
