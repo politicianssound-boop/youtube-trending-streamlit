@@ -227,14 +227,15 @@ with tabs[2]:
             st.error("Channel ID inválido.")
 
 
-# 🌱 Nicho
+# 🌱 Nicho mejorado con antigüedad y más resultados
 with tabs[3]:
     st.markdown("Analiza canales pequeños para encontrar oportunidades de nicho.")
     
     kw_niche = st.text_input("Palabra clave o categoría:")
     max_subs = st.number_input("Máx. suscriptores:", min_value=0, value=50000)
     max_views = st.number_input("Máx. vistas totales:", min_value=0, value=5000000)
-    max_results_niche = st.slider("Videos a analizar:", 5, 50, 20)
+    months_old = st.slider("Máx. antigüedad de vídeos (meses):", 1, 6, 2)
+    max_results_niche = st.slider("Máx. vídeos a analizar:", 10, 200, 100)
     
     faceless_keywords = ["compilation", "animation", "gameplay", "tutorial", "music", "sound", "relax", "asmr", "lofi"]
 
@@ -242,17 +243,39 @@ with tabs[3]:
         if not kw_niche:
             st.warning("Introduce una palabra clave para iniciar la búsqueda.")
         else:
-            url = (
-                f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults={max_results_niche}"
-                f"&q={kw_niche}&order=viewCount&key={API_KEY}"
+            # Calcular fecha límite para publishedAfter
+            fecha_limite = (datetime.datetime.utcnow() - datetime.timedelta(days=30*months_old)).isoformat("T") + "Z"
+
+            base_url = (
+                f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=viewCount"
+                f"&q={kw_niche}&publishedAfter={fecha_limite}&key={API_KEY}"
             )
-            search_res = requests.get(url).json()
-            
-            channel_info_list = []
+
+            all_videos = []
+            next_page = None
+
+            # Paginación hasta alcanzar el máximo definido
+            while len(all_videos) < max_results_niche:
+                url = base_url + f"&maxResults=50"
+                if next_page:
+                    url += f"&pageToken={next_page}"
+                
+                res = requests.get(url).json()
+                all_videos.extend(res.get("items", []))
+                next_page = res.get("nextPageToken")
+                
+                if not next_page:
+                    break
+
+            # Deduplicar canales
+            canales_unicos = {}
             niche_words = []
             
-            for item in search_res.get("items", []):
+            for item in all_videos:
                 ch_id = item["snippet"]["channelId"]
+                if ch_id in canales_unicos:
+                    continue  # ya lo analizamos
+
                 ch_data = requests.get(
                     f"https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={ch_id}&key={API_KEY}"
                 ).json()
@@ -262,28 +285,29 @@ with tabs[3]:
                     subs = int(c0["statistics"].get("subscriberCount", 0))
                     views_total = int(c0["statistics"].get("viewCount", 0))
 
+                    # Filtrar por tamaño de canal
                     if subs <= max_subs and views_total <= max_views:
                         title = c0["snippet"]["title"]
                         desc = c0["snippet"]["description"]
-                        
-                        # Flag faceless
                         is_faceless = any(word in (title.lower() + desc.lower()) for word in faceless_keywords)
 
-                        channel_info_list.append({
+                        canales_unicos[ch_id] = {
                             "Canal": title,
                             "Suscriptores": subs,
                             "Vistas totales": views_total,
                             "Faceless probable": "Sí" if is_faceless else "No",
                             "Enlace": f"https://www.youtube.com/channel/{ch_id}"
-                        })
+                        }
 
-                        # Palabras de títulos para ranking
-                        niche_words.extend(item["snippet"]["title"].lower().split())
+                # Palabras clave de títulos para ranking
+                niche_words.extend(item["snippet"]["title"].lower().split())
 
-            # Mostrar tabla de canales candidatos
-            if channel_info_list:
-                df_channels = pd.DataFrame(channel_info_list).sort_values("Suscriptores")
-                st.subheader("Canales candidatos")
+            # Mostrar resultados
+            st.subheader(f"Resultados: {len(canales_unicos)} canales encontrados que cumplen el filtro "
+                         f"(de {len(set(i['snippet']['channelId'] for i in all_videos))} únicos analizados)")
+
+            if canales_unicos:
+                df_channels = pd.DataFrame(canales_unicos.values()).sort_values("Suscriptores")
                 st.dataframe(df_channels)
                 st.download_button("⬇️ Descargar CSV", df_channels.to_csv(index=False), "nicho_canales.csv", "text/csv")
 
