@@ -247,7 +247,7 @@ with tabs[4]:
 from pytrends.request import TrendReq
 
 with tabs[5]:
-    st.markdown("Analiza la popularidad de una palabra clave en YouTube y descubre consultas relacionadas.")
+    st.markdown("Analiza la popularidad de una palabra clave en YouTube y descubre consultas relacionadas con datos reales de vídeos recientes.")
 
     kw_trend = st.text_input("Palabra clave para analizar:")
     timeframes = {
@@ -293,16 +293,34 @@ with tabs[5]:
             # Consultas relacionadas
             related = pytrends.related_queries()
             if kw_trend in related:
-                st.subheader("🔍 Consultas relacionadas")
-                rel_data = related[kw_trend]
+                st.subheader("🔍 Consultas relacionadas con datos de YouTube (últimos 30 días)")
 
+                def youtube_quick_stats(keyword):
+                    fecha_limite = (datetime.datetime.utcnow() - datetime.timedelta(days=30)).isoformat("T") + "Z"
+                    url = (
+                        f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=video"
+                        f"&q={keyword}&publishedAfter={fecha_limite}&maxResults=10&order=viewCount&key={API_KEY}"
+                    )
+                    res = requests.get(url).json()
+                    ids = [i["id"]["videoId"] for i in res.get("items", [])]
+                    if not ids:
+                        return 0, 0
+                    stats = requests.get(
+                        f"https://www.googleapis.com/youtube/v3/videos?part=statistics&id={','.join(ids)}&key={API_KEY}"
+                    ).json()
+                    views = [int(v["statistics"].get("viewCount", 0)) for v in stats.get("items", [])]
+                    return len(ids), int(sum(views) / len(views)) if views else 0
+
+                rel_data = related[kw_trend]
                 col1, col2 = st.columns(2)
+
                 with col1:
                     st.markdown("**Top**")
                     if rel_data.get("top") is not None:
                         for _, row in rel_data["top"].iterrows():
                             palabra = row["query"]
-                            st.write(f"{palabra} ({row['value']})")
+                            n_vids, avg_views = youtube_quick_stats(palabra)
+                            st.write(f"{palabra} ({row['value']}) — 🎥 {n_vids} vídeos, 📊 {avg_views} vistas promedio")
                             if st.button("Analizar", key=f"top_{palabra}"):
                                 st.session_state["nicho_kw"] = palabra
                                 st.session_state["active_tab"] = "Nicho"
@@ -316,8 +334,9 @@ with tabs[5]:
                     if rel_data.get("rising") is not None:
                         for _, row in rel_data["rising"].iterrows():
                             palabra = row["query"]
+                            n_vids, avg_views = youtube_quick_stats(palabra)
                             change = f"+{row['value']}%" if row['value'] != 0 else "Nuevo"
-                            st.write(f"{palabra} ({change})")
+                            st.write(f"{palabra} ({change}) — 🎥 {n_vids} vídeos, 📊 {avg_views} vistas promedio")
                             if st.button("Analizar", key=f"rise_{palabra}"):
                                 st.session_state["nicho_kw"] = palabra
                                 st.session_state["active_tab"] = "Nicho"
