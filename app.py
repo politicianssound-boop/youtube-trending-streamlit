@@ -245,10 +245,9 @@ with tabs[4]:
         st.dataframe(df_cats)
 
 from pytrends.request import TrendReq
-import matplotlib.dates as mdates
 
 with tabs[5]:
-    st.markdown("Analiza la popularidad de una palabra clave en YouTube según Google Trends.")
+    st.markdown("Analiza la popularidad de una palabra clave en YouTube y descubre consultas relacionadas.")
 
     kw_trend = st.text_input("Palabra clave para analizar:")
     timeframes = {
@@ -270,8 +269,9 @@ with tabs[5]:
         else:
             pytrends = TrendReq(hl='es-ES', tz=0)
             pytrends.build_payload([kw_trend], cat=0, timeframe=timeframes[period], geo="", gprop="youtube")
-            df_trend = pytrends.interest_over_time()
 
+            # Gráfico de interés
+            df_trend = pytrends.interest_over_time()
             if not df_trend.empty:
                 df_trend = df_trend.drop(columns=["isPartial"], errors="ignore")
                 st.line_chart(df_trend)
@@ -290,5 +290,38 @@ with tabs[5]:
             else:
                 st.warning("No se encontraron datos para esa palabra clave en YouTube.")
 
+            # Consultas relacionadas
+            related = pytrends.related_queries()
+            if kw_trend in related:
+                st.subheader("🔍 Consultas relacionadas")
+                rel_data = related[kw_trend]
 
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Top**")
+                    if rel_data.get("top") is not None:
+                        for _, row in rel_data["top"].iterrows():
+                            palabra = row["query"]
+                            st.write(f"{palabra} ({row['value']})")
+                            if st.button("Analizar", key=f"top_{palabra}"):
+                                st.session_state["nicho_kw"] = palabra
+                                st.session_state["active_tab"] = "Nicho"
+                                st.session_state["auto_search"] = True
+                                st.experimental_rerun()
+                    else:
+                        st.write("Sin datos.")
 
+                with col2:
+                    st.markdown("**Rising**")
+                    if rel_data.get("rising") is not None:
+                        for _, row in rel_data["rising"].iterrows():
+                            palabra = row["query"]
+                            change = f"+{row['value']}%" if row['value'] != 0 else "Nuevo"
+                            st.write(f"{palabra} ({change})")
+                            if st.button("Analizar", key=f"rise_{palabra}"):
+                                st.session_state["nicho_kw"] = palabra
+                                st.session_state["active_tab"] = "Nicho"
+                                st.session_state["auto_search"] = True
+                                st.experimental_rerun()
+                    else:
+                        st.write("Sin datos.")
