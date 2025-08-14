@@ -10,7 +10,7 @@ API_KEY = st.secrets["YOUTUBE_API_KEY"]
 st.title("📺 YouTube Análisis Avanzado")
 
 # Lista de pestañas
-tabs_labels = ["Tendencias", "Buscar", "Explorar Canal", "Nicho", "Ideas de Nicho"]
+tabs_labels = ["Tendencias", "Buscar", "Explorar Canal", "Nicho", "Ideas de Nicho", "Popularidad"]
 
 # Recuperar pestaña activa desde session_state o por defecto la primera
 active_tab_label = st.session_state.get("active_tab", tabs_labels[0])
@@ -243,4 +243,52 @@ with tabs[4]:
         df_cats = pd.DataFrame(cat_count.items(), columns=["Categoría", "Frecuencia"])
         st.subheader("Categorías más frecuentes en tendencias")
         st.dataframe(df_cats)
+
+from pytrends.request import TrendReq
+import matplotlib.dates as mdates
+
+with tabs[5]:
+    st.markdown("Analiza la popularidad de una palabra clave en YouTube según Google Trends.")
+
+    kw_trend = st.text_input("Palabra clave para analizar:")
+    timeframes = {
+        "Última hora": "now 1-H",
+        "Últimas 4 horas": "now 4-H",
+        "Último día": "now 1-d",
+        "Últimos 7 días": "now 7-d",
+        "Últimos 30 días": "today 1-m",
+        "Últimos 90 días": "today 3-m",
+        "Últimos 12 meses": "today 12-m",
+        "Últimos 5 años": "today+5-y",
+        "Desde 2008": "all"
+    }
+    period = st.selectbox("Periodo de análisis:", list(timeframes.keys()))
+
+    if st.button("Analizar tendencia"):
+        if not kw_trend:
+            st.warning("Introduce una palabra clave.")
+        else:
+            pytrends = TrendReq(hl='es-ES', tz=0)
+            pytrends.build_payload([kw_trend], cat=0, timeframe=timeframes[period], geo="", gprop="youtube")
+            df_trend = pytrends.interest_over_time()
+
+            if not df_trend.empty:
+                df_trend = df_trend.drop(columns=["isPartial"], errors="ignore")
+                st.line_chart(df_trend)
+
+                avg_interest = df_trend[kw_trend].mean()
+                last_value = df_trend[kw_trend].iloc[-1]
+                st.write(f"📊 **Interés medio:** {avg_interest:.2f}")
+                st.write(f"📈 **Último valor:** {last_value}")
+
+                if last_value > avg_interest:
+                    st.success("Tendencia al alza 📈")
+                elif last_value < avg_interest:
+                    st.error("Tendencia a la baja 📉")
+                else:
+                    st.info("Tendencia estable ➡️")
+            else:
+                st.warning("No se encontraron datos para esa palabra clave en YouTube.")
+
+
 
