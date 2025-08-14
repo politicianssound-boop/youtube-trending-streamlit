@@ -247,7 +247,7 @@ with tabs[4]:
 from pytrends.request import TrendReq
 
 with tabs[5]:
-    st.markdown("Analiza la popularidad de una palabra clave en YouTube y descubre consultas relacionadas con datos reales de vídeos recientes.")
+    st.markdown("Analiza la popularidad de una palabra clave en YouTube y descubre consultas relacionadas.")
 
     kw_trend = st.text_input("Palabra clave para analizar:")
     timeframes = {
@@ -268,11 +268,15 @@ with tabs[5]:
             st.warning("Introduce una palabra clave.")
         else:
             pytrends = TrendReq(hl='es-ES', tz=0)
-            pytrends.build_payload([kw_trend], cat=0, timeframe=timeframes[period], geo="", gprop="youtube")
+            try:
+                pytrends.build_payload([kw_trend], cat=0, timeframe=timeframes[period], geo="", gprop="youtube")
+                df_trend = pytrends.interest_over_time()
+            except Exception as e:
+                st.error("Google Trends está limitando el acceso temporalmente. Intenta más tarde.")
+                df_trend = None
 
             # Gráfico de interés
-            df_trend = pytrends.interest_over_time()
-            if not df_trend.empty:
+            if df_trend is not None and not df_trend.empty:
                 df_trend = df_trend.drop(columns=["isPartial"], errors="ignore")
                 st.line_chart(df_trend)
 
@@ -287,40 +291,27 @@ with tabs[5]:
                     st.error("Tendencia a la baja 📉")
                 else:
                     st.info("Tendencia estable ➡️")
-            else:
+            elif df_trend is not None:
                 st.warning("No se encontraron datos para esa palabra clave en YouTube.")
 
             # Consultas relacionadas
-            related = pytrends.related_queries()
+            try:
+                related = pytrends.related_queries()
+            except Exception:
+                related = {}
+
             if kw_trend in related:
-                st.subheader("🔍 Consultas relacionadas con datos de YouTube (últimos 30 días)")
+                st.subheader("🔍 Consultas relacionadas")
 
-                def youtube_quick_stats(keyword):
-                    fecha_limite = (datetime.datetime.utcnow() - datetime.timedelta(days=30)).isoformat("T") + "Z"
-                    url = (
-                        f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=video"
-                        f"&q={keyword}&publishedAfter={fecha_limite}&maxResults=10&order=viewCount&key={API_KEY}"
-                    )
-                    res = requests.get(url).json()
-                    ids = [i["id"]["videoId"] for i in res.get("items", [])]
-                    if not ids:
-                        return 0, 0
-                    stats = requests.get(
-                        f"https://www.googleapis.com/youtube/v3/videos?part=statistics&id={','.join(ids)}&key={API_KEY}"
-                    ).json()
-                    views = [int(v["statistics"].get("viewCount", 0)) for v in stats.get("items", [])]
-                    return len(ids), int(sum(views) / len(views)) if views else 0
-
-                rel_data = related[kw_trend]
                 col1, col2 = st.columns(2)
+                rel_data = related[kw_trend]
 
                 with col1:
                     st.markdown("**Top**")
                     if rel_data.get("top") is not None:
                         for _, row in rel_data["top"].iterrows():
                             palabra = row["query"]
-                            n_vids, avg_views = youtube_quick_stats(palabra)
-                            st.write(f"{palabra} ({row['value']}) — 🎥 {n_vids} vídeos, 📊 {avg_views} vistas promedio")
+                            st.write(f"{palabra} ({row['value']})")
                             if st.button("Analizar", key=f"top_{palabra}"):
                                 st.session_state["nicho_kw"] = palabra
                                 st.session_state["active_tab"] = "Nicho"
@@ -334,9 +325,8 @@ with tabs[5]:
                     if rel_data.get("rising") is not None:
                         for _, row in rel_data["rising"].iterrows():
                             palabra = row["query"]
-                            n_vids, avg_views = youtube_quick_stats(palabra)
                             change = f"+{row['value']}%" if row['value'] != 0 else "Nuevo"
-                            st.write(f"{palabra} ({change}) — 🎥 {n_vids} vídeos, 📊 {avg_views} vistas promedio")
+                            st.write(f"{palabra} ({change})")
                             if st.button("Analizar", key=f"rise_{palabra}"):
                                 st.session_state["nicho_kw"] = palabra
                                 st.session_state["active_tab"] = "Nicho"
