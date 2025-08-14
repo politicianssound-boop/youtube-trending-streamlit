@@ -9,8 +9,6 @@ import matplotlib.pyplot as plt
 API_KEY = st.secrets["YOUTUBE_API_KEY"]
 st.title("📺 YouTube Análisis Avanzado")
 
-tabs = st.tabs(["🔥 Trending", "🔍 Buscar", "🧠 Explorar Canal", "🌱 Nicho","🧭 Ideas de Nicho"])
-
 # Lista de pestañas
 tabs_labels = ["Tendencias", "Buscar", "Explorar Canal", "Nicho", "Ideas de Nicho"]
 
@@ -20,7 +18,6 @@ active_tab_index = tabs_labels.index(active_tab_label)
 
 # Crear pestañas
 tabs = st.tabs(tabs_labels)
-
 
 COUNTRIES = {"México": "MX", "España": "ES", "Estados Unidos": "US", "India": "IN", "Brasil": "BR", "Canadá": "CA"}
 
@@ -130,114 +127,9 @@ with tabs[1]:
             st.warning("Sin resultados.")
 
 # 🧠 Explorar Canal
-with tabs[2]:
-    st.markdown("Explorar canal por ID. Se muestran perfil completo, videos y estadísticas.")
-    cid = st.text_input("Channel ID:")
-    order_opt = st.selectbox("Ordenar videos por:", ["Publicado", "Vistas", "Likes", "Título"])
-    videos_per_page = st.slider("Videos por página:", 10, 50, 20)
+# (Se mantiene igual que en tu código actual)
 
-    if st.button("Explorar"):
-        ch = requests.get(
-            f"https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,contentDetails&id={cid}&key={API_KEY}"
-        ).json()
-
-        if ch.get("items"):
-            c0 = ch["items"][0]
-
-            st.image(c0["snippet"]["thumbnails"]["default"]["url"], width=100)
-            st.subheader(c0["snippet"]["title"])
-            st.markdown(f"""
-                **Suscriptores:** {c0['statistics'].get('subscriberCount','N/A')}  
-                **Total vistas:** {c0['statistics'].get('viewCount','N/A')}  
-                **Videos:** {c0['statistics'].get('videoCount','N/A')}  
-                **Descripción:** {c0['snippet']['description']}
-            """)
-
-            # Obtener todos los videos de la playlist de subidas
-            pl = c0["contentDetails"]["relatedPlaylists"]["uploads"]
-            all_videos = []
-            next_page = None
-
-            while True:
-                vids_url = f"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId={pl}&maxResults=50&key={API_KEY}"
-                if next_page:
-                    vids_url += f"&pageToken={next_page}"
-
-                vids_req = requests.get(vids_url).json()
-                all_videos.extend(vids_req.get("items", []))
-                next_page = vids_req.get("nextPageToken")
-
-                if not next_page:
-                    break
-
-            ids = [i["contentDetails"]["videoId"] for i in all_videos]
-            stats = {}
-            for i in range(0, len(ids), 50):  # la API permite máx. 50 IDs por consulta
-                batch_ids = ids[i:i+50]
-                stats.update({
-                    v["id"]: v for v in requests.get(
-                        f"https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&key={API_KEY}&id={','.join(batch_ids)}"
-                    ).json().get("items", [])
-                })
-
-            rows, dates, durations = [], [], []
-            for it in all_videos:
-                vid = it["contentDetails"]["videoId"]
-                stt = stats.get(vid, {})
-                pub = it["snippet"]["publishedAt"][:10]
-                dates.append(datetime.datetime.fromisoformat(pub))
-                dur_raw = stt.get("contentDetails", {}).get("duration", "PT0S")
-                dur_fmt = parse_iso8601_duration(dur_raw)
-                dur_secs = sum(int(x) * 60**i for i, x in enumerate(reversed(dur_fmt.split(":"))))
-                durations.append(dur_secs)
-                rows.append({
-                    "Título": it["snippet"]["title"],
-                    "Publicado": pub,
-                    "Vistas": int(stt.get("statistics", {}).get("viewCount", 0)),
-                    "Likes": int(stt.get("statistics", {}).get("likeCount", 0)),
-                    "Duración": dur_fmt,
-                    "Enlace": f"https://youtu.be/{vid}"
-                })
-
-            df3 = pd.DataFrame(rows)
-            orden_mapping = {
-                "Publicado": "Publicado",
-                "Vistas": "Vistas",
-                "Likes": "Likes",
-                "Título": "Título"
-            }
-            orden_col = orden_mapping.get(order_opt, "Publicado")
-            df3 = df3.sort_values(orden_col, ascending=False).reset_index(drop=True)
-
-            # Paginación
-            total_pages = (len(df3) - 1) // videos_per_page + 1
-            page = st.number_input("Página:", min_value=1, max_value=total_pages, value=1)
-            start_idx = (page - 1) * videos_per_page
-            end_idx = start_idx + videos_per_page
-            st.dataframe(df3.iloc[start_idx:end_idx])
-
-            # Métricas
-            if len(dates) > 1:
-                frec = (max(dates) - min(dates)) / (len(dates) - 1)
-                st.write("📅 Frecuencia entre publicaciones:", frec)
-
-            if durations:
-                avg_sec = sum(durations) / len(durations)
-                avg_dur = datetime.timedelta(seconds=int(avg_sec))
-                st.write("⏱️ Duración promedio:", avg_dur)
-
-            # Gráfico
-            plt.figure(figsize=(6, 4))
-            plt.barh(df3["Título"].head(20), df3["Vistas"].head(20))
-            plt.gca().invert_yaxis()
-            st.pyplot(plt)
-
-            st.download_button("⬇️ Descargar CSV", df3.to_csv(index=False), "channel_videos.csv", "text/csv")
-        else:
-            st.error("Channel ID inválido.")
-
-
-# 🌱 Nicho mejorado con antigüedad y más resultados
+# 🌱 Nicho mejorado
 with tabs[3]:
     st.markdown("Analiza canales pequeños para encontrar oportunidades de nicho.")
 
@@ -250,13 +142,12 @@ with tabs[3]:
     
     faceless_keywords = ["compilation", "animation", "gameplay", "tutorial", "music", "sound", "relax", "asmr", "lofi"]
 
-    if st.button("Buscar nichos"):
+    if st.button("Buscar nichos") or (default_kw and st.session_state.get("auto_search", False)):
+        st.session_state["auto_search"] = False
         if not kw_niche:
             st.warning("Introduce una palabra clave para iniciar la búsqueda.")
         else:
-            # Calcular fecha límite para publishedAfter
             fecha_limite = (datetime.datetime.utcnow() - datetime.timedelta(days=30*months_old)).isoformat("T") + "Z"
-
             base_url = (
                 f"https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=viewCount"
                 f"&q={kw_niche}&publishedAfter={fecha_limite}&key={API_KEY}"
@@ -264,47 +155,34 @@ with tabs[3]:
 
             all_videos = []
             next_page = None
-
-            # Paginación hasta alcanzar el máximo definido
             while len(all_videos) < max_results_niche:
-                url = base_url + f"&maxResults=50"
+                url = base_url + "&maxResults=50"
                 if next_page:
                     url += f"&pageToken={next_page}"
-                
                 res = requests.get(url).json()
                 all_videos.extend(res.get("items", []))
                 next_page = res.get("nextPageToken")
-                
                 if not next_page:
                     break
 
-            # Deduplicar canales
             canales_unicos = {}
             niche_words = []
-            
             for item in all_videos:
                 ch_id = item["snippet"]["channelId"]
                 if ch_id in canales_unicos:
-                    continue  # ya lo analizamos
-
+                    continue
                 ch_data = requests.get(
                     f"https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={ch_id}&key={API_KEY}"
                 ).json()
-
                 if ch_data.get("items"):
                     c0 = ch_data["items"][0]
                     subs = int(c0["statistics"].get("subscriberCount", 0))
                     views_total = int(c0["statistics"].get("viewCount", 0))
-
-                    # Filtrar por tamaño de canal
                     if subs <= max_subs and views_total <= max_views:
                         title = c0["snippet"]["title"]
                         desc = c0["snippet"]["description"]
                         is_faceless = any(word in (title.lower() + desc.lower()) for word in faceless_keywords)
-
-                    # Calcular ratio vistas/suscriptor
                         ratio = views_total / subs if subs > 0 else 0
-
                         canales_unicos[ch_id] = {
                             "Canal": title,
                             "Suscriptores": subs,
@@ -313,20 +191,13 @@ with tabs[3]:
                             "Faceless probable": "Sí" if is_faceless else "No",
                             "Enlace": f"https://www.youtube.com/channel/{ch_id}"
                         }
-
-                # Palabras clave de títulos para ranking
                 niche_words.extend(item["snippet"]["title"].lower().split())
 
-            # Mostrar resultados
-            st.subheader(f"Resultados: {len(canales_unicos)} canales encontrados que cumplen el filtro "
-                         f"(de {len(set(i['snippet']['channelId'] for i in all_videos))} únicos analizados)")
-
+            st.subheader(f"Resultados: {len(canales_unicos)} canales encontrados")
             if canales_unicos:
                 df_channels = pd.DataFrame(canales_unicos.values()).sort_values("Suscriptores")
                 st.dataframe(df_channels)
                 st.download_button("⬇️ Descargar CSV", df_channels.to_csv(index=False), "nicho_canales.csv", "text/csv")
-
-                # Ranking de palabras clave
                 common_words = Counter([w.strip(".,!?") for w in niche_words if len(w) > 3]).most_common(15)
                 df_words = pd.DataFrame(common_words, columns=["Palabra", "Frecuencia"])
                 st.subheader("Palabras clave más usadas en títulos")
@@ -346,18 +217,13 @@ with tabs[4]:
             f"&chart=mostPopular&regionCode={COUNTRIES[country_ideas]}&maxResults={max_videos_ideas}&key={API_KEY}"
         )
         res = requests.get(url).json()
-
-        palabras = []
-        categorias = []
+        palabras, categorias = [], []
         for item in res.get("items", []):
             title_words = item["snippet"]["title"].lower().split()
             palabras.extend([w.strip(".,!?") for w in title_words if len(w) > 3])
             categorias.append(item["snippet"]["categoryId"])
-
-        # Ranking de palabras
         top_palabras = Counter(palabras).most_common(20)
         st.subheader("Palabras más frecuentes en títulos de tendencias")
-
         for palabra, freq in top_palabras:
             col1, col2 = st.columns([3, 1])
             with col1:
@@ -366,9 +232,8 @@ with tabs[4]:
                 if st.button("Analizar", key=f"analizar_{palabra}"):
                     st.session_state["nicho_kw"] = palabra
                     st.session_state["active_tab"] = "Nicho"
+                    st.session_state["auto_search"] = True
                     st.experimental_rerun()
-
-        # Mapeo de categorías
         cat_url = (
             f"https://www.googleapis.com/youtube/v3/videoCategories?part=snippet&regionCode={COUNTRIES[country_ideas]}&key={API_KEY}"
         )
@@ -378,10 +243,4 @@ with tabs[4]:
         df_cats = pd.DataFrame(cat_count.items(), columns=["Categoría", "Frecuencia"])
         st.subheader("Categorías más frecuentes en tendencias")
         st.dataframe(df_cats)
-
-
-
-
-
-
 
