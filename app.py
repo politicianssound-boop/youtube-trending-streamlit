@@ -338,17 +338,32 @@ with tabs[5]:
 with tabs[6]:  # séptima pestaña
     st.markdown("⬆️ **Subir un vídeo a YouTube** (a través del servicio en Cloud Run)")
 
-    # URL de tu microservicio
     CLOUD_RUN_URL = "https://youtube-uploader-service-183426857852.us-central1.run.app"
 
-    # Obtener canales autorizados
+    # 🔑 Autorizar un nuevo canal
+    st.subheader("🔑 Autorizar un nuevo canal")
+    alias = st.text_input("Alias para el canal (ej: canal_monetizado)")
+    if st.button("Generar enlace de autorización"):
+        if alias.strip():
+            auth_url = f"{CLOUD_RUN_URL}/authorize/{alias.strip()}"
+            st.success(f"Enlace de autorización generado para '{alias}':")
+            st.markdown(f"[Haz clic aquí para autorizar el canal]({auth_url})")
+        else:
+            st.error("Debes escribir un alias para el canal.")
+
+    st.markdown("---")
+
+    # 🎥 Subir un vídeo
+    st.subheader("🎥 Subir un vídeo")
+
+    # Obtener lista de canales autorizados
     try:
         resp = requests.get(f"{CLOUD_RUN_URL}/list_channels")
         if resp.status_code == 200:
             channels = resp.json()
             if channels:
-                options = {f"{v['title']} ({k})": k for k, v in channels.items()}
-                selected_channel = st.selectbox("Selecciona un canal:", list(options.keys()))
+                options = {f"{v.get('title', 'Desconocido')} ({k})": k for k, v in channels.items()}
+                selected_channel = st.selectbox("Selecciona un canal autorizado:", list(options.keys()))
                 channel_name = options[selected_channel]
             else:
                 st.warning("No hay canales autorizados todavía. Autoriza uno primero.")
@@ -361,14 +376,49 @@ with tabs[6]:  # séptima pestaña
         channel_name = None
 
     if channel_name:
-        # Campos de metadatos
         title = st.text_input("Título del vídeo:")
         description = st.text_area("Descripción del vídeo:")
         privacy = st.selectbox("Privacidad:", ["public", "unlisted", "private"])
         tags = st.text_input("Etiquetas (separadas por comas):")
 
-        # Subir archivo
-        video_file = st.file_uploader("Selecciona el archivo de vídeo (.mp4)", type=["mp4", "mov", "avi", "mkv"])
+        # Categorías oficiales de YouTube
+        categories = {
+            "Film & Animation": "1",
+            "Autos & Vehicles": "2",
+            "Music": "10",
+            "Pets & Animals": "15",
+            "Sports": "17",
+            "Short Movies": "18",
+            "Travel & Events": "19",
+            "Gaming": "20",
+            "Videoblogging": "21",
+            "People & Blogs": "22",
+            "Comedy": "23",
+            "Entertainment": "24",
+            "News & Politics": "25",
+            "Howto & Style": "26",
+            "Education": "27",
+            "Science & Technology": "28",
+            "Nonprofits & Activism": "29",
+            "Movies": "30",
+            "Anime/Animation": "31",
+            "Action/Adventure": "32",
+            "Classics": "33",
+            "Documentary": "35",
+            "Drama": "36",
+            "Family": "37",
+            "Foreign": "38",
+            "Horror": "39",
+            "Sci-Fi/Fantasy": "40",
+            "Thriller": "41",
+            "Shorts": "42",
+            "Shows": "43",
+            "Trailers": "44"
+        }
+        category_name = st.selectbox("Categoría:", list(categories.keys()))
+        category_id = categories[category_name]
+
+        video_file = st.file_uploader("Selecciona el archivo de vídeo (.mp4, .mov, .avi, .mkv)", type=["mp4", "mov", "avi", "mkv"])
 
         if st.button("🚀 Subir vídeo"):
             if not video_file:
@@ -380,7 +430,12 @@ with tabs[6]:  # séptima pestaña
                         "title": title,
                         "description": description,
                         "privacy": privacy,
-                        "tags": [t.strip() for t in tags.split(",") if t.strip()]
+                        "tags": [t.strip() for t in tags.split(",") if t.strip()],
+                        "categoryId": category_id,
+                        # Configuración por defecto
+                        "embeddable": "true",
+                        "license": "youtube",
+                        "madeForKids": "false"
                     }
                     with st.spinner("Subiendo vídeo a YouTube..."):
                         response = requests.post(f"{CLOUD_RUN_URL}/upload/{channel_name}", files=files, data=data)
@@ -393,5 +448,6 @@ with tabs[6]:  # séptima pestaña
                         st.error(f"❌ Error en la subida: {response.text}")
                 except Exception as e:
                     st.error(f"Error al conectar con el servicio: {e}")
+
 
 
