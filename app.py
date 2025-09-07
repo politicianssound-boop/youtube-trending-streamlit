@@ -342,14 +342,27 @@ with tabs[6]:  # séptima pestaña
 
     # 🔑 Autorizar un nuevo canal
     st.subheader("🔑 Autorizar un nuevo canal")
-    alias = st.text_input("Alias para el canal (ej: canal_monetizado)")
-    if st.button("Generar enlace de autorización"):
-        if alias.strip():
-            auth_url = f"{CLOUD_RUN_URL}/authorize/{alias.strip()}"
-            st.success(f"Enlace de autorización generado para '{alias}':")
-            st.markdown(f"[Haz clic aquí para autorizar el canal]({auth_url})")
-        else:
-            st.error("Debes escribir un alias para el canal.")
+
+alias = st.text_input("Alias para el canal (ej: canal_monetizado)")
+
+if st.button("Generar enlace de autorización"):
+    if alias.strip():
+        auth_url = f"{CLOUD_RUN_URL}/authorize/{alias.strip()}"
+        redirect_uri = f"{CLOUD_RUN_URL}/oauth2callback/{alias.strip()}"
+
+        st.success(f"Enlace de autorización generado para '{alias}':")
+        st.markdown(f"[Haz clic aquí para autorizar el canal]({auth_url})")
+
+        st.warning("""
+        ⚠️ **IMPORTANTE**  
+        1. Ve a Google Cloud Console → APIs y servicios → Pantalla de consentimiento OAuth y añade el Gmail de este canal en **Usuarios de prueba**.  
+        2. Ve a Google Cloud Console → APIs y servicios → Credenciales → Cliente OAuth 2.0 y añade este Redirect URI autorizado:
+        """)
+
+        st.code(redirect_uri, language="text")
+
+    else:
+        st.error("Debes escribir un alias para el canal.")
 
     st.markdown("---")
 
@@ -448,6 +461,7 @@ with tabs[6]:  # séptima pestaña
                         st.error(f"❌ Error en la subida: {response.text}")
                 except Exception as e:
                     st.error(f"Error al conectar con el servicio: {e}")
+
 
 
 
