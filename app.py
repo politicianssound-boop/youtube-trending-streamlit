@@ -10,7 +10,7 @@ API_KEY = st.secrets["YOUTUBE_API_KEY"]
 st.title("📺 YouTube Análisis Avanzado")
 
 # Lista de pestañas
-tabs_labels = ["Tendencias", "Buscar", "Explorar Canal", "Nicho", "Ideas de Nicho", "Popularidad"]
+tabs_labels = ["Tendencias", "Buscar", "Explorar Canal", "Nicho", "Ideas de Nicho", "Popularidad","Subidas"]
 
 # Recuperar pestaña activa desde session_state o por defecto la primera
 active_tab_label = st.session_state.get("active_tab", tabs_labels[0])
@@ -393,3 +393,4 @@ with tabs[6]:  # séptima pestaña
                         st.error(f"❌ Error en la subida: {response.text}")
                 except Exception as e:
                     st.error(f"Error al conectar con el servicio: {e}")
+
