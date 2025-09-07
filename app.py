@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import re
 import datetime
+import time
 from collections import Counter
 import matplotlib.pyplot as plt
 
@@ -456,7 +457,13 @@ with tabs[6]:  # séptima pestaña
                                 "categoryId": category_id,
                                 "gcs_path": gcs_path
                             }
+
                             with st.spinner("Subiendo de GCS a YouTube..."):
+                                progress = st.progress(0)
+                                for i in range(100):  # simular progreso
+                                    time.sleep(0.05)
+                                    progress.progress(i + 1)
+
                                 yt_resp = requests.post(
                                     f"{CLOUD_RUN_URL}/upload_from_gcs/{channel_name}", 
                                     json=data
@@ -472,3 +479,4 @@ with tabs[6]:  # séptima pestaña
 
                 except Exception as e:
                     st.error(f"Error al conectar con el servicio: {e}")
+
