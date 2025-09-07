@@ -335,6 +335,8 @@ with tabs[5]:
                     else:
                         st.write("Sin datos.")
 
+import requests
+
 with tabs[6]:  # séptima pestaña
     st.markdown("⬆️ **Subir un vídeo a YouTube** (a través del servicio en Cloud Run)")
 
@@ -342,27 +344,23 @@ with tabs[6]:  # séptima pestaña
 
     # 🔑 Autorizar un nuevo canal
     st.subheader("🔑 Autorizar un nuevo canal")
+    alias = st.text_input("Alias para el canal (ej: canal_monetizado)")
+    if st.button("Generar enlace de autorización"):
+        if alias.strip():
+            auth_url = f"{CLOUD_RUN_URL}/authorize/{alias.strip()}"
+            redirect_uri = f"{CLOUD_RUN_URL}/oauth2callback/{alias.strip()}"
 
-alias = st.text_input("Alias para el canal (ej: canal_monetizado)")
+            st.success(f"Enlace de autorización generado para '{alias}':")
+            st.markdown(f"[Haz clic aquí para autorizar el canal]({auth_url})")
 
-if st.button("Generar enlace de autorización"):
-    if alias.strip():
-        auth_url = f"{CLOUD_RUN_URL}/authorize/{alias.strip()}"
-        redirect_uri = f"{CLOUD_RUN_URL}/oauth2callback/{alias.strip()}"
-
-        st.success(f"Enlace de autorización generado para '{alias}':")
-        st.markdown(f"[Haz clic aquí para autorizar el canal]({auth_url})")
-
-        st.warning("""
-        ⚠️ **IMPORTANTE**  
-        1. Ve a Google Cloud Console → APIs y servicios → Pantalla de consentimiento OAuth y añade el Gmail de este canal en **Usuarios de prueba**.  
-        2. Ve a Google Cloud Console → APIs y servicios → Credenciales → Cliente OAuth 2.0 y añade este Redirect URI autorizado:
-        """)
-
-        st.code(redirect_uri, language="text")
-
-    else:
-        st.error("Debes escribir un alias para el canal.")
+            st.warning("""
+            ⚠️ **IMPORTANTE**  
+            1. Añade el Gmail en **Usuarios de prueba** (Pantalla de consentimiento OAuth).  
+            2. Añade este Redirect URI en tu Cliente OAuth en Google Cloud Console:
+            """)
+            st.code(redirect_uri, language="text")
+        else:
+            st.error("Debes escribir un alias para el canal.")
 
     st.markdown("---")
 
@@ -385,7 +383,7 @@ if st.button("Generar enlace de autorización"):
             st.error("Error al obtener canales autorizados.")
             channel_name = None
     except Exception as e:
-        st.error(f"No se pudo conectar al servicio: {e}")
+        st.error(f"No se pudo conectar con el servicio: {e}")
         channel_name = None
 
     if channel_name:
@@ -401,7 +399,6 @@ if st.button("Generar enlace de autorización"):
             "Music": "10",
             "Pets & Animals": "15",
             "Sports": "17",
-            "Short Movies": "18",
             "Travel & Events": "19",
             "Gaming": "20",
             "Videoblogging": "21",
@@ -412,23 +409,10 @@ if st.button("Generar enlace de autorización"):
             "Howto & Style": "26",
             "Education": "27",
             "Science & Technology": "28",
-            "Nonprofits & Activism": "29",
-            "Movies": "30",
-            "Anime/Animation": "31",
-            "Action/Adventure": "32",
-            "Classics": "33",
-            "Documentary": "35",
-            "Drama": "36",
-            "Family": "37",
-            "Foreign": "38",
-            "Horror": "39",
-            "Sci-Fi/Fantasy": "40",
-            "Thriller": "41",
-            "Shorts": "42",
-            "Shows": "43",
-            "Trailers": "44"
+            "Nonprofits & Activism": "29"
         }
-        category_name = st.selectbox("Categoría:", list(categories.keys()))
+
+        category_name = st.selectbox("Categoría:", list(categories.keys()), index=list(categories.keys()).index("People & Blogs"))
         category_id = categories[category_name]
 
         video_file = st.file_uploader("Selecciona el archivo de vídeo (.mp4, .mov, .avi, .mkv)", type=["mp4", "mov", "avi", "mkv"])
@@ -445,7 +429,6 @@ if st.button("Generar enlace de autorización"):
                         "privacy": privacy,
                         "tags": [t.strip() for t in tags.split(",") if t.strip()],
                         "categoryId": category_id,
-                        # Configuración por defecto
                         "embeddable": "true",
                         "license": "youtube",
                         "madeForKids": "false"
@@ -461,6 +444,8 @@ if st.button("Generar enlace de autorización"):
                         st.error(f"❌ Error en la subida: {response.text}")
                 except Exception as e:
                     st.error(f"Error al conectar con el servicio: {e}")
+
+
 
 
 
