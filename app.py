@@ -334,3 +334,62 @@ with tabs[5]:
                                 st.experimental_rerun()
                     else:
                         st.write("Sin datos.")
+
+with tabs[6]:  # séptima pestaña
+    st.markdown("⬆️ **Subir un vídeo a YouTube** (a través del servicio en Cloud Run)")
+
+    # URL de tu microservicio
+    CLOUD_RUN_URL = "https://youtube-uploader-service-183426857852.us-central1.run.app"
+
+    # Obtener canales autorizados
+    try:
+        resp = requests.get(f"{CLOUD_RUN_URL}/list_channels")
+        if resp.status_code == 200:
+            channels = resp.json()
+            if channels:
+                options = {f"{v['title']} ({k})": k for k, v in channels.items()}
+                selected_channel = st.selectbox("Selecciona un canal:", list(options.keys()))
+                channel_name = options[selected_channel]
+            else:
+                st.warning("No hay canales autorizados todavía. Autoriza uno primero.")
+                channel_name = None
+        else:
+            st.error("Error al obtener canales autorizados.")
+            channel_name = None
+    except Exception as e:
+        st.error(f"No se pudo conectar al servicio: {e}")
+        channel_name = None
+
+    if channel_name:
+        # Campos de metadatos
+        title = st.text_input("Título del vídeo:")
+        description = st.text_area("Descripción del vídeo:")
+        privacy = st.selectbox("Privacidad:", ["public", "unlisted", "private"])
+        tags = st.text_input("Etiquetas (separadas por comas):")
+
+        # Subir archivo
+        video_file = st.file_uploader("Selecciona el archivo de vídeo (.mp4)", type=["mp4", "mov", "avi", "mkv"])
+
+        if st.button("🚀 Subir vídeo"):
+            if not video_file:
+                st.error("Debes seleccionar un archivo de vídeo.")
+            else:
+                try:
+                    files = {"file": (video_file.name, video_file.getvalue())}
+                    data = {
+                        "title": title,
+                        "description": description,
+                        "privacy": privacy,
+                        "tags": [t.strip() for t in tags.split(",") if t.strip()]
+                    }
+                    with st.spinner("Subiendo vídeo a YouTube..."):
+                        response = requests.post(f"{CLOUD_RUN_URL}/upload/{channel_name}", files=files, data=data)
+                    if response.status_code == 200:
+                        result = response.json()
+                        st.success(f"✅ Vídeo subido con éxito: {result['url']}")
+                        st.write("ID del vídeo:", result["videoId"])
+                        st.markdown(f"[Ver en YouTube]({result['url']})")
+                    else:
+                        st.error(f"❌ Error en la subida: {response.text}")
+                except Exception as e:
+                    st.error(f"Error al conectar con el servicio: {e}")
