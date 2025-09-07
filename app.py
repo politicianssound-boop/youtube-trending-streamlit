@@ -418,32 +418,48 @@ with tabs[6]:  # séptima pestaña
         video_file = st.file_uploader("Selecciona el archivo de vídeo (.mp4, .mov, .avi, .mkv)", type=["mp4", "mov", "avi", "mkv"])
 
         if st.button("🚀 Subir vídeo"):
-            if not video_file:
-                st.error("Debes seleccionar un archivo de vídeo.")
+    if not video_file:
+        st.error("Debes seleccionar un archivo de vídeo.")
+    else:
+        try:
+            # 1️⃣ Obtener URL firmada
+            resp = requests.get(f"{CLOUD_RUN_URL}/generate_upload_url/{channel_name}")
+            if resp.status_code != 200:
+                st.error("Error al generar URL de subida.")
             else:
-                try:
-                    files = {"file": (video_file.name, video_file.getvalue())}
+                upload_info = resp.json()
+                upload_url = upload_info["upload_url"]
+                gcs_path = upload_info["gcs_path"]
+
+                # 2️⃣ Subir el archivo a GCS con la URL firmada
+                with st.spinner("Subiendo a Google Cloud Storage..."):
+                    put_resp = requests.put(upload_url, data=video_file.getvalue(), headers={"Content-Type": "video/mp4"})
+                if put_resp.status_code != 200:
+                    st.error(f"Error al subir a GCS: {put_resp.text}")
+                else:
+                    # 3️⃣ Decirle a Cloud Run que suba a YouTube
                     data = {
                         "title": title,
                         "description": description,
                         "privacy": privacy,
                         "tags": [t.strip() for t in tags.split(",") if t.strip()],
                         "categoryId": category_id,
-                        "embeddable": "true",
-                        "license": "youtube",
-                        "madeForKids": "false"
+                        "gcs_path": gcs_path
                     }
-                    with st.spinner("Subiendo vídeo a YouTube..."):
-                        response = requests.post(f"{CLOUD_RUN_URL}/upload/{channel_name}", files=files, data=data)
-                    if response.status_code == 200:
-                        result = response.json()
+                    with st.spinner("Subiendo de GCS a YouTube..."):
+                        yt_resp = requests.post(f"{CLOUD_RUN_URL}/upload_from_gcs/{channel_name}", json=data)
+
+                    if yt_resp.status_code == 200:
+                        result = yt_resp.json()
                         st.success(f"✅ Vídeo subido con éxito: {result['url']}")
                         st.write("ID del vídeo:", result["videoId"])
                         st.markdown(f"[Ver en YouTube]({result['url']})")
                     else:
-                        st.error(f"❌ Error en la subida: {response.text}")
-                except Exception as e:
-                    st.error(f"Error al conectar con el servicio: {e}")
+                        st.error(f"❌ Error al subir a YouTube: {yt_resp.text}")
+
+        except Exception as e:
+            st.error(f"Error al conectar con el servicio: {e}")
+
 
 
 
