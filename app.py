@@ -13,6 +13,19 @@ st.title("📺 YouTube Análisis Avanzado")
 # Lista de pestañas
 tabs_labels = ["Tendencias", "Buscar", "Explorar Canal", "Nicho", "Ideas de Nicho", "Popularidad","Subir Vídeo"]
 
+# --- Helpers para la pestaña de subida ---
+CLOUD_RUN_URL = "https://youtube-uploader-service-183426857852.us-central1.run.app"
+
+@st.cache_data(ttl=60)
+def fetch_channels():
+    try:
+        r = requests.get(f"{CLOUD_RUN_URL}/list_channels", timeout=10)
+        r.raise_for_status()
+        return r.json()  # dict {alias: {...}}
+    except Exception as e:
+        st.error(f"No se pudo conectar con el servicio: {e}")
+        return {}
+
 # Recuperar pestaña activa desde session_state o por defecto la primera
 active_tab_label = st.session_state.get("active_tab", tabs_labels[0])
 active_tab_index = tabs_labels.index(active_tab_label)
@@ -339,19 +352,15 @@ with tabs[5]:
 with tabs[6]:  # séptima pestaña
     st.markdown("⬆️ **Subir un vídeo a YouTube** (a través del servicio en Cloud Run)")
 
-    CLOUD_RUN_URL = "https://youtube-uploader-service-183426857852.us-central1.run.app"
-
     # 🔑 Autorizar un nuevo canal
     st.subheader("🔑 Autorizar un nuevo canal")
-    alias = st.text_input("Alias para el canal (ej: canal_monetizado)")
-    if st.button("Generar enlace de autorización"):
+    alias = st.text_input("Alias para el canal (ej: canal_monetizado)", key="auth_alias")
+    if st.button("Generar enlace de autorización", key="btn_auth"):
         if alias.strip():
             auth_url = f"{CLOUD_RUN_URL}/authorize/{alias.strip()}"
             redirect_uri = f"{CLOUD_RUN_URL}/oauth2callback/{alias.strip()}"
-
             st.success(f"Enlace de autorización generado para '{alias}':")
             st.markdown(f"[Haz clic aquí para autorizar el canal]({auth_url})")
-
             st.warning("""
             ⚠️ **IMPORTANTE**  
             1. Añade el Gmail en **Usuarios de prueba** (Pantalla de consentimiento OAuth).  
@@ -366,31 +375,36 @@ with tabs[6]:  # séptima pestaña
     # 🎥 Subir un vídeo
     st.subheader("🎥 Subir un vídeo")
 
-    # Obtener lista de canales autorizados
-    try:
-        resp = requests.get(f"{CLOUD_RUN_URL}/list_channels")
-        if resp.status_code == 200:
-            channels = resp.json()
-            if channels:
-                options = {f"{v.get('title', 'Desconocido')} ({k})": k for k, v in channels.items()}
-                selected_channel = st.selectbox("Selecciona un canal autorizado:", list(options.keys()))
-                channel_name = options[selected_channel]
-            else:
-                st.warning("No hay canales autorizados todavía. Autoriza uno primero.")
-                channel_name = None
-        else:
-            st.error("Error al obtener canales autorizados.")
-            channel_name = None
-    except Exception as e:
-        st.error(f"No se pudo conectar con el servicio: {e}")
+    # 1) Obtener y fijar canal autorizado (cache + orden estable)
+    channels = fetch_channels()
+    if channels:
+        # Construir etiquetas estables y ordenadas
+        options_map = {f"{v.get('title', 'Desconocido')} ({k})": k for k, v in channels.items()}
+        labels = sorted(options_map.keys(), key=str.lower)
+
+        # Default desde session_state si existe
+        default_label = None
+        if "channel_name" in st.session_state:
+            for lbl, alias_ in options_map.items():
+                if alias_ == st.session_state["channel_name"]:
+                    default_label = lbl
+                    break
+        default_index = labels.index(default_label) if default_label in labels else 0
+
+        selected_label = st.selectbox(
+            "Selecciona un canal autorizado:",
+            labels,
+            index=default_index,
+            key="upload_selected_label"
+        )
+        channel_name = options_map[selected_label]
+        st.session_state["channel_name"] = channel_name
+    else:
+        st.warning("No hay canales autorizados todavía. Autoriza uno primero.")
         channel_name = None
 
+    # 2) Formulario: evita reruns mientras rellenas
     if channel_name:
-        title = st.text_input("Título del vídeo:")
-        description = st.text_area("Descripción del vídeo:")
-        privacy = st.selectbox("Privacidad:", ["public", "unlisted", "private"])
-        tags = st.text_input("Etiquetas (separadas por comas):")
-
         # Categorías oficiales de YouTube
         categories = {
             "Film & Animation": "1",
@@ -408,75 +422,102 @@ with tabs[6]:  # séptima pestaña
             "Howto & Style": "26",
             "Education": "27",
             "Science & Technology": "28",
-            "Nonprofits & Activism": "29"
+            "Nonprofits & Activism": "29",
         }
 
-        category_name = st.selectbox(
-            "Categoría:", 
-            list(categories.keys()), 
-            index=list(categories.keys()).index("People & Blogs")
-        )
-        category_id = categories[category_name]
+        with st.form("upload_form", clear_on_submit=False):
+            title = st.text_input("Título del vídeo:", key="upload_title")
+            description = st.text_area("Descripción del vídeo:", key="upload_desc")
+            privacy = st.selectbox("Privacidad:", ["public", "unlisted", "private"], key="upload_privacy")
+            tags = st.text_input("Etiquetas (separadas por comas):", key="upload_tags")
 
-        video_file = st.file_uploader(
-            "Selecciona el archivo de vídeo (.mp4, .mov, .avi, .mkv)", 
-            type=["mp4", "mov", "avi", "mkv"]
-        )
+            category_name = st.selectbox(
+                "Categoría:",
+                list(categories.keys()),
+                index=list(categories.keys()).index("People & Blogs"),
+                key="upload_category"
+            )
+            category_id = categories[category_name]
 
-        if st.button("🚀 Subir vídeo"):
+            video_file = st.file_uploader(
+                "Selecciona el archivo de vídeo (.mp4, .mov, .avi, .mkv)",
+                type=["mp4", "mov", "avi", "mkv"],
+                key="upload_file"
+            )
+
+            submitted = st.form_submit_button("🚀 Subir vídeo")
+
+        if submitted:
             if not video_file:
                 st.error("Debes seleccionar un archivo de vídeo.")
             else:
                 try:
                     # 1️⃣ Obtener URL firmada
-                    resp = requests.get(f"{CLOUD_RUN_URL}/generate_upload_url/{channel_name}")
+                    resp = requests.get(
+                        f"{CLOUD_RUN_URL}/generate_upload_url/{st.session_state['channel_name']}",
+                        timeout=30
+                    )
                     if resp.status_code != 200:
-                        st.error("Error al generar URL de subida.")
+                        st.error(f"Error al generar URL de subida: {resp.text}")
+                        st.stop()
+                    upload_info = resp.json()
+                    upload_url = upload_info["upload_url"]
+                    gcs_path = upload_info["gcs_path"]
+
+                    # 2️⃣ Subir el archivo a GCS con la URL firmada (stream/buffer)
+                    st.info("Subiendo a Google Cloud Storage…")
+                    try:
+                        # Asegura el puntero al inicio
+                        try:
+                            video_file.seek(0)
+                        except Exception:
+                            pass
+
+                        headers = {"Content-Type": "video/mp4"}
+                        # Si el uploader conoce el tamaño, pásalo como Content-Length (algunos backends lo agradecen)
+                        if hasattr(video_file, "size") and isinstance(video_file.size, int):
+                            headers["Content-Length"] = str(video_file.size)
+
+                        put_resp = requests.put(
+                            upload_url,
+                            data=video_file,  # objeto tipo archivo
+                            headers=headers,
+                            timeout=600  # 10 min para un vídeo mediano
+                        )
+                    except requests.exceptions.RequestException as e:
+                        st.error(f"Error de red al subir a GCS: {e}")
+                        st.stop()
+
+                    if put_resp.status_code not in (200, 201):
+                        st.error(f"Error al subir a GCS ({put_resp.status_code}): {put_resp.text}")
+                        st.stop()
+
+                    # 3️⃣ Pedir a Cloud Run que suba a YouTube
+                    st.info("Subiendo de GCS a YouTube… esto puede tardar.")
+                    data = {
+                        "title": title,
+                        "description": description,
+                        "privacy": privacy,
+                        "tags": [t.strip() for t in tags.split(",") if t.strip()],
+                        "categoryId": category_id,
+                        "gcs_path": gcs_path,
+                    }
+                    yt_resp = requests.post(
+                        f"{CLOUD_RUN_URL}/upload_from_gcs/{st.session_state['channel_name']}",
+                        json=data,
+                        timeout=1800  # hasta 30 min
+                    )
+
+                    if yt_resp.status_code == 200:
+                        result = yt_resp.json()
+                        st.success(f"✅ Vídeo subido con éxito: {result['url']}")
+                        st.write("ID del vídeo:", result["videoId"])
+                        st.markdown(f"[Ver en YouTube]({result['url']})")
                     else:
-                        upload_info = resp.json()
-                        upload_url = upload_info["upload_url"]
-                        gcs_path = upload_info["gcs_path"]
-
-                        # 2️⃣ Subir el archivo a GCS con la URL firmada
-                        with st.spinner("Subiendo a Google Cloud Storage..."):
-                            put_resp = requests.put(
-                                upload_url, 
-                                data=video_file.getvalue(), 
-                                headers={"Content-Type": "video/mp4"}
-                            )
-
-                        if put_resp.status_code != 200:
-                            st.error(f"Error al subir a GCS: {put_resp.text}")
-                        else:
-                            # 3️⃣ Decirle a Cloud Run que suba a YouTube
-                            data = {
-                                "title": title,
-                                "description": description,
-                                "privacy": privacy,
-                                "tags": [t.strip() for t in tags.split(",") if t.strip()],
-                                "categoryId": category_id,
-                                "gcs_path": gcs_path
-                            }
-
-                            with st.spinner("Subiendo de GCS a YouTube..."):
-                                progress = st.progress(0)
-                                for i in range(100):  # simular progreso
-                                    time.sleep(0.05)
-                                    progress.progress(i + 1)
-
-                                yt_resp = requests.post(
-                                    f"{CLOUD_RUN_URL}/upload_from_gcs/{channel_name}", 
-                                    json=data
-                                )
-
-                            if yt_resp.status_code == 200:
-                                result = yt_resp.json()
-                                st.success(f"✅ Vídeo subido con éxito: {result['url']}")
-                                st.write("ID del vídeo:", result["videoId"])
-                                st.markdown(f"[Ver en YouTube]({result['url']})")
-                            else:
-                                st.error(f"❌ Error al subir a YouTube: {yt_resp.text}")
+                        # Nuestro backend ahora devuelve JSON con el detalle del error
+                        st.error(f"❌ Error al subir a YouTube ({yt_resp.status_code}): {yt_resp.text}")
 
                 except Exception as e:
                     st.error(f"Error al conectar con el servicio: {e}")
+
 
